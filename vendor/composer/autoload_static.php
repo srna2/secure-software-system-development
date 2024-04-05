@@ -24,10 +24,12 @@ class ComposerStaticInite9ca42d5f02e9b0f75635d35d4afc83f
         array (
             'Psr\\Log\\' => 8,
             'Psr\\Cache\\' => 10,
+            'ParagonIE\\ConstantTime\\' => 23,
         ),
         'O' => 
         array (
             'OpenApi\\' => 8,
+            'OTPHP\\' => 6,
         ),
         'D' => 
         array (
@@ -61,9 +63,17 @@ class ComposerStaticInite9ca42d5f02e9b0f75635d35d4afc83f
         array (
             0 => __DIR__ . '/..' . '/psr/cache/src',
         ),
+        'ParagonIE\\ConstantTime\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/paragonie/constant_time_encoding/src',
+        ),
         'OpenApi\\' => 
         array (
             0 => __DIR__ . '/..' . '/zircote/swagger-php/src',
+        ),
+        'OTPHP\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/spomky-labs/otphp/src',
         ),
         'Doctrine\\Common\\Lexer\\' => 
         array (

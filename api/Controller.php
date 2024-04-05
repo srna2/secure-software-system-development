@@ -1,9 +1,11 @@
 <?php
 
 namespace Sssd;
+include 'vendor/autoload.php';
 
 use OpenApi\Annotations as OA;
 use Flight as Flight;
+use OTPHP\TOTP;
 
 class Controller {
 
@@ -123,6 +125,11 @@ class Controller {
             echo "Mobile number is not valid.\n";
             die;
         }
+
+        // A random secret will be generated from this.
+        // You should store the secret with the user for verification.
+        $otp = TOTP::generate();
+        echo "The OTP secret is: {$otp->getSecret()}\n";
     }
 
     /**
@@ -160,6 +167,7 @@ class Controller {
      */
 
     public function login() {
+        $username = Flight::request()->data->username;
         $data = Flight::request()->data;
         $storedHash = '$2y$10$W9pDq1ACsNZYBUGoJ9fvSORD1KNz7NuYcBRApkM2ygRMuwO.or1su';
   
@@ -185,6 +193,37 @@ class Controller {
             echo 'Invalid password.';
             die;
         }
+
+        if (!$user['firstlogin']) {
+            $secret = $user['secretotp'];
+            $otp = TOTP::createFromSecret($secret);
+            $otp->setLabel('amina@sssdotp');
+            $grCodeUri = $otp->getQrCodeUri(
+                'https://api.qrserver.com/v1/create-qr-code/?data=[DATA]&size=300x300&ecc=M',
+                '[DATA]'
+            );
+            echo "<img src='{$grCodeUri}'>";
+        
+            // DISPLAY QR CODE
+            echo "Scan the QR code to complete your first login: $grCodeUri";
+        
+            $updateStmt = $this->conn->prepare("UPDATE users SET firstlogin = 1 WHERE username = :username");
+            $updateStmt->bindParam(':username', $username);
+            $updateStmt->execute();
+        
+            return;
+        
+        } else {
+            $input_otp = $data['otp'] ?? '';
+            $secret = $user['secretotp'];
+            $otp = TOTP::createFromSecret($secret);
+            if ($otp->verify($input_otp)) {
+                echo "Welcome back, " . $user['username'] . "!";
+            } else {
+                echo "Invalid OTP.";
+            }
+        }
+        
 
         echo  "Login successful.";
     }
