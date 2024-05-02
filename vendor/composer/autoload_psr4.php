@@ -6,6 +6,8 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
+    'libphonenumber\\' => array($vendorDir . '/giggsey/libphonenumber-for-php/src'),
+    'Symfony\\Polyfill\\Mbstring\\' => array($vendorDir . '/symfony/polyfill-mbstring'),
     'Symfony\\Polyfill\\Ctype\\' => array($vendorDir . '/symfony/polyfill-ctype'),
     'Symfony\\Component\\Yaml\\' => array($vendorDir . '/symfony/yaml'),
     'Symfony\\Component\\Finder\\' => array($vendorDir . '/symfony/finder'),
@@ -15,6 +17,7 @@ return array(
     'ParagonIE\\ConstantTime\\' => array($vendorDir . '/paragonie/constant_time_encoding/src'),
     'OpenApi\\' => array($vendorDir . '/zircote/swagger-php/src'),
     'OTPHP\\' => array($vendorDir . '/spomky-labs/otphp/src'),
+    'Giggsey\\Locale\\' => array($vendorDir . '/giggsey/locale/src'),
     'Doctrine\\Common\\Lexer\\' => array($vendorDir . '/doctrine/lexer/src'),
     'Doctrine\\Common\\Annotations\\' => array($vendorDir . '/doctrine/annotations/lib/Doctrine/Common/Annotations'),
 );

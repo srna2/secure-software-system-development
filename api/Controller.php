@@ -1,11 +1,16 @@
 <?php
 
 namespace Sssd;
-include 'vendor/autoload.php';
+
+//include '../vendor/autoload.php';
 
 use OpenApi\Annotations as OA;
 use Flight as Flight;
 use OTPHP\TOTP;
+use libphonenumber\PhoneNumberUtil;
+use libphonenumber\PhoneNumberType;
+
+
 
 class Controller {
 
@@ -19,12 +24,12 @@ class Controller {
      *       required=true,
      *       description="Provide All Info Below",
      *       @OA\JsonContent(
-     *           required={"full_name", "username", "email", "password", "phone_number"},
-     *           @OA\Property(property="full_name", type="string", format="text", example="Amina Srna"),
-     *           @OA\Property(property="username", type="string", format="text", example="user"),
+     *           required={"fullName", "username", "email", "password", "mobileNumber"},
+     *           @OA\Property(property="fullName", type="string", format="text", example="Amina Srna"),
+     *           @OA\Property(property="username", type="string", format="text", example="aminasrna123"),
      *           @OA\Property(property="email", type="email", format="text", example="someuser@example.com"),
      *           @OA\Property(property="password", type="string", format="text", example="123456"),
-     *           @OA\Property(property="phone_number", type="string", format="text", example="0611112223"),
+     *           @OA\Property(property="mobileNumber", type="string", format="text", example="0611112223"),
      *       ),
      *   ),
      *   @OA\Response(
@@ -45,16 +50,21 @@ class Controller {
      *   )
      * )
      */
+
     
     public function register() {
+        $fullName = Flight::request()->data->fullName;
         $username = Flight::request()->data->username;
         $password = Flight::request()->data->password;
         $email = Flight::request()->data->email;
         $mobileNumber = Flight::request()->data->mobileNumber;
-      
-        //USERNAME VALIDATION:
-      
-        // Should be longer than 3 characters.
+
+        
+        // VALIDATIONS
+
+
+        // USERNAME VALIDATION: Should be longer than 3 characters.
+
         if (mb_strlen($username) < 3 ) {
             Flight::json(["message" => "Username must be at least three characters long\n"], 400);
             return;
@@ -66,8 +76,7 @@ class Controller {
             die;
         }
       
-        //Validate against a list of “reserved” names (prevent admin etc..)
-      
+        // Validate against a list of “reserved” names (prevent admin etc..)
         $invalidUsernames = array("admin", "root", "superuser", "testuser",);
       
         if (in_array($username, $invalidUsernames)) {
@@ -75,16 +84,15 @@ class Controller {
             die;
         }
       
-        //PASSWORD VALIDATION:
+        // PASSWORD VALIDATION: Should be at least 8 characters long.
       
-        //Should be at least 8 characters long.
-        
         if (mb_strlen($password)<8) {
-            echo "Password must be at least 8 characters long\n";
-            die;
+            Flight::json(["message" => "Password must be at least 8 characters long"], 400);
+            return;
         }
 
-        //HIBP
+        // HIBP
+        
         $sha1Password = strtoupper(sha1($password));
         $prefix = substr($sha1Password, 0, 5);
         $suffix = substr($sha1Password, 5);
@@ -103,33 +111,79 @@ class Controller {
         if (str_contains($response, $suffix)) {
             echo "Password found. STOP";
             die;
-        } else {
-            echo "Password is not found in the pwned database.";
+        }
+        
+        // EMAIL ADDRESS VALIDATION:
+
+        $validTlds = ['BA', 'COM', 'NET'];
+        if (!$this->tldValidation($email, $validTlds)) {
+            echo "Invalid TLD in email address";
+            return;
         }
 
+        if (!$this->mxValidation($email)) {
+            echo "No valid MX records found for the email domain";
+            return;
+        }
+      
+        // PHONE NUMBER VALIDATION:
+        if (!is_null($mobileNumber) && !$this->phoneValidation($mobileNumber)) {
+            Flight::json(["message" => "Mobile number is not valid."], 400);
+            return;
+        }
 
-        //EMAIL ADDRESS VALIDATION:
-      
-        //Needs to follow a valid email format (example@domain.com).
-      
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            echo "Email address is not valid.\n";
-            die;
-        }
-      
-        //PHONE NUMBER VALIDATION:
-      
-        //Must be a mobile number
-      
-        if (!is_null($mobileNumber) && !preg_match('/^387\d{8,9}$/', $mobileNumber)) {
-            echo "Mobile number is not valid.\n";
-            die;
-        }
 
         // A random secret will be generated from this.
-        // You should store the secret with the user for verification.
         $otp = TOTP::generate();
-        echo "The OTP secret is: {$otp->getSecret()}\n";
+        $secret = $otp->getSecret();
+        echo "The OTP secret is: {$secret}\n";
+
+
+        // Generate QR code URI
+        $otp->setLabel($username); // Set label as username or any identifier
+        $grCodeUri = $otp->getQrCodeUri(
+            'https://api.qrserver.com/v1/create-qr-code/?data=' . $secret . '&size=300x300&ecc=M',
+            $secret
+        );
+
+        echo "<img src='{$grCodeUri}'>";
+
+        // $code = Flight::request()->data->code;
+        // if (!$otp->verify($code)) {
+        //     Flight::json(["error" => "Invalid code provided"], 400);
+        //     return;
+        // }
+
+
+
+        // ALL ABOUT DATABASE
+
+        // Hash the password
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        $connection = require __DIR__ . "/database.php";
+
+        // Save the secret to the user table
+        $connection = require __DIR__ . "/database.php";
+        $sql = "INSERT INTO users (fullName, username, email, passwordHash, mobileNumber, secret) VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $connection->prepare($sql);
+
+        if (!$stmt) {
+            die("SQL error: " . $connection->error);
+        }
+
+        // Bind parameters and execute
+        $result = $stmt->execute([$fullName, $username, $email, $passwordHash, $mobileNumber, $secret]);
+
+
+        if ($result) {
+            Flight::json(["message" => "User registered successfully"]);
+        } else {
+            Flight::json(["error" => "User registration failed"]);
+        }
+
+        $stmt = null;
+
+
     }
 
     /**
@@ -167,7 +221,6 @@ class Controller {
      */
 
     public function login() {
-        $username = Flight::request()->data->username;
         $data = Flight::request()->data;
         $storedHash = '$2y$10$W9pDq1ACsNZYBUGoJ9fvSORD1KNz7NuYcBRApkM2ygRMuwO.or1su';
   
@@ -186,45 +239,71 @@ class Controller {
           return;
         }
 
+        // Retrieve hashed password from the database based on provided username or email
+             
+        $username = $data['username'];
+        $email = $data['email'];
+
+        // Database query to get the hashed password
+        $connection = require __DIR__ . "/database.php";
+        $sql = "SELECT passwordHash FROM users WHERE username = :username OR email = :email";
+        $stmt = $connection->prepare($sql);
+        $stmt->execute(['username' => $username, 'email' => $email]);
+        $storedHash = $stmt->fetchColumn();
+        
+        if (!$storedHash) {
+            echo '{"error": "Invalid username/email."}';
+            return;
+        }
+        
         // Verify the password against the hash
         if (password_verify($data['password'], $storedHash)) {
-            echo 'Password is valid!';
+            echo '{"message": "Login successful."}';
         } else {
-            echo 'Invalid password.';
-            die;
-        }
-
-        if (!$user['firstlogin']) {
-            $secret = $user['secretotp'];
-            $otp = TOTP::createFromSecret($secret);
-            $otp->setLabel('amina@sssdotp');
-            $grCodeUri = $otp->getQrCodeUri(
-                'https://api.qrserver.com/v1/create-qr-code/?data=[DATA]&size=300x300&ecc=M',
-                '[DATA]'
-            );
-            echo "<img src='{$grCodeUri}'>";
-        
-            // DISPLAY QR CODE
-            echo "Scan the QR code to complete your first login: $grCodeUri";
-        
-            $updateStmt = $this->conn->prepare("UPDATE users SET firstlogin = 1 WHERE username = :username");
-            $updateStmt->bindParam(':username', $username);
-            $updateStmt->execute();
-        
-            return;
-        
-        } else {
-            $input_otp = $data['otp'] ?? '';
-            $secret = $user['secretotp'];
-            $otp = TOTP::createFromSecret($secret);
-            if ($otp->verify($input_otp)) {
-                echo "Welcome back, " . $user['username'] . "!";
-            } else {
-                echo "Invalid OTP.";
-            }
+            echo '{"error": "Invalid password."}';
         }
         
+    }
 
-        echo  "Login successful.";
+    private function phoneValidation($phoneNumber) {
+        $phoneUtil = PhoneNumberUtil::getInstance();
+        
+        try {
+            $numberProto = $phoneUtil->parse($phoneNumber, "BA"); 
+            $numberType = $phoneUtil->getNumberType($numberProto);
+            
+            return $numberType === PhoneNumberType::MOBILE;
+        } catch (\libphonenumber\NumberParseException $e) {
+            return false;
+        }
+    }
+
+    private function tldValidation($email) {
+        $validTLDs = array('com', 'net', 'org', 'info', 'ba');
+        $parts = explode('@', $email);
+        if (count($parts) !== 2) {
+            return false; 
+        }
+        $domainParts = explode('.', $parts[1]);
+        $tld = end($domainParts);
+        return in_array($tld, $validTLDs);
+    }
+
+    private function mxValidation($email) {
+        $parts = explode('@', $email);
+        if (count($parts) !== 2) {
+            return false;
+        }
+        $domain = $parts[1];
+
+        return getmxrr($domain, $mx_details);
     }
 }
+
+
+
+
+
+  
+
+

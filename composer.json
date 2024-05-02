@@ -3,7 +3,8 @@
         "flightphp/core": "^3.6",
         "zircote/swagger-php": "^4.8",
         "doctrine/annotations": "^2.0",
-        "spomky-labs/otphp": "^11.2"
+        "spomky-labs/otphp": "^11.2",
+        "giggsey/libphonenumber-for-php": "^8.13"
     },
     "autoload": {
         "psr-4": {
